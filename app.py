@@ -1,8 +1,6 @@
 import streamlit as st  
 import pandas as pd  
 import datetime  
-import json  
-from pathlib import Path  
 import plotly.express as px  
 import plotly.graph_objects as go  
 
@@ -69,6 +67,7 @@ class EstudoTracker:
             }  
         }  
 
+        # Inicializar o estado da sessão se não existir  
         if 'progresso' not in st.session_state:  
             st.session_state.progresso = self._inicializar_progresso()  
 
@@ -94,13 +93,16 @@ class EstudoTracker:
         return progresso  
 
     def marcar_progresso(self, area, subarea, topico, tipo_progresso):  
+        """Marca o progresso de um tópico específico"""  
         if tipo_progresso not in ['estudado', 'exercicios', 'revisao1', 'revisao2', 'revisao3']:  
-            raise ValueError("Tipo de progresso inválido")  
+            st.error("Tipo de progresso inválido")  
+            return  
 
         st.session_state.progresso[area][subarea][topico][tipo_progresso] = True  
         st.session_state.progresso[area][subarea][topico][f"data_{tipo_progresso}"] = datetime.datetime.now().strftime("%Y-%m-%d")  
 
     def gerar_relatorio(self):  
+        """Gera um relatório detalhado do progresso"""  
         relatorio = []  
         for area, subareas in st.session_state.progresso.items():  
             for subarea, topicos in subareas.items():  
@@ -123,6 +125,7 @@ class EstudoTracker:
         return pd.DataFrame(relatorio)  
 
     def calcular_progresso_geral(self):  
+        """Calcula o percentual de progresso geral dos estudos"""  
         total_topicos = 0  
         topicos_estudados = 0  
         exercicios_feitos = 0  
@@ -144,19 +147,26 @@ class EstudoTracker:
         }  
 
 def main():  
-    st.set_page_config(page_title="Tracker de Estudos", layout="wide")  
-    st.title("📚 Tracker de Estudos - Concurso EMBRAPA")  
-
-    tracker = EstudoTracker()  
-
-    # Sidebar para seleção de ações  
-    st.sidebar.title("Controles")  
-    acao = st.sidebar.radio(  
-        "Escolha uma ação:",  
-        ["Marcar Progresso", "Ver Relatório", "Visualizar Estatísticas"]  
+    st.set_page_config(  
+        page_title="Tracker de Estudos EMBRAPA",  
+        page_icon="📚",  
+        layout="wide",  
+        initial_sidebar_state="expanded"  
     )  
 
-    if acao == "Marcar Progresso":  
+    st.title("📚 Tracker de Estudos - Concurso EMBRAPA")  
+
+    # Inicializar o tracker  
+    tracker = EstudoTracker()  
+
+    # Sidebar para navegação  
+    st.sidebar.title("Navegação")  
+    pagina = st.sidebar.radio(  
+        "Escolha uma seção:",  
+        ["Marcar Progresso", "Relatório de Progresso", "Estatísticas"]  
+    )  
+
+    if pagina == "Marcar Progresso":  
         st.header("Marcar Progresso")  
 
         col1, col2, col3, col4 = st.columns(4)  
@@ -176,11 +186,11 @@ def main():
                 ['estudado', 'exercicios', 'revisao1', 'revisao2', 'revisao3']  
             )  
 
-        if st.button("Marcar como Concluído"):  
+        if st.button("Marcar como Concluído", type="primary"):  
             tracker.marcar_progresso(area, subarea, topico, tipo_progresso)  
-            st.success(f"Progresso marcado com sucesso! - {topico} ({tipo_progresso})")  
+            st.success(f"✅ {topico} marcado como {tipo_progresso}!")  
 
-    elif acao == "Ver Relatório":  
+    elif pagina == "Relatório de Progresso":  
         st.header("Relatório de Progresso")  
 
         relatorio = tracker.gerar_relatorio()  
@@ -193,48 +203,46 @@ def main():
             filtro_subarea = st.multiselect("Filtrar por Subárea:", relatorio['Subarea'].unique())  
 
         # Aplicar filtros  
+        df_filtrado = relatorio.copy()  
         if filtro_area:  
-            relatorio = relatorio[relatorio['Area'].isin(filtro_area)]  
+            df_filtrado = df_filtrado[df_filtrado['Area'].isin(filtro_area)]  
         if filtro_subarea:  
-            relatorio = relatorio[relatorio['Subarea'].isin(filtro_subarea)]  
+            df_filtrado = df_filtrado[df_filtrado['Subarea'].isin(filtro_subarea)]  
 
-        st.dataframe(relatorio)  
+        st.dataframe(  
+            df_filtrado,  
+            use_container_width=True,  
+            hide_index=True  
+        )  
 
-    else:  # Visualizar Estatísticas  
-        st.header("Estatísticas Gerais")  
+    else:  # Estatísticas  
+        st.header("Estatísticas de Progresso")  
 
         progresso = tracker.calcular_progresso_geral()  
 
+        # Métricas principais  
         col1, col2, col3 = st.columns(3)  
 
         with col1:  
-            fig1 = go.Figure(go.Indicator(  
-                mode = "gauge+number",  
-                value = progresso['Progresso_Estudo'],  
-                title = {'text': "Progresso de Estudo"},  
-                gauge = {'axis': {'range': [None, 100]}}  
-            ))  
-            st.plotly_chart(fig1)  
+            st.metric(  
+                "Progresso de Estudo",  
+                f"{progresso['Progresso_Estudo']:.1f}%"  
+            )  
 
         with col2:  
-            fig2 = go.Figure(go.Indicator(  
-                mode = "gauge+number",  
-                value = progresso['Progresso_Exercicios'],  
-                title = {'text': "Progresso de Exercícios"},  
-                gauge = {'axis': {'range': [None, 100]}}  
-            ))  
-            st.plotly_chart(fig2)  
+            st.metric(  
+                "Progresso de Exercícios",  
+                f"{progresso['Progresso_Exercicios']:.1f}%"  
+            )  
 
         with col3:  
-            fig3 = go.Figure(go.Indicator(  
-                mode = "gauge+number",  
-                value = progresso['Media_Revisoes'],  
-                title = {'text': "Média de Revisões"},  
-                gauge = {'axis': {'range': [None, 100]}}  
-            ))  
-            st.plotly_chart(fig3)  
+            st.metric(  
+                "Média de Revisões",  
+                f"{progresso['Media_Revisoes']:.1f}%"  
+            )  
 
-        # Gráfico de progresso por área  
+        # Gráficos  
+        st.subheader("Progresso por Área")  
         relatorio = tracker.gerar_relatorio()  
         progresso_por_area = relatorio.groupby('Area').agg({  
             'Estudado': 'mean',  
@@ -244,12 +252,12 @@ def main():
             'Revisao3': 'mean'  
         }) * 100  
 
-        fig4 = px.bar(  
+        fig = px.bar(  
             progresso_por_area,  
             barmode='group',  
-            title="Progresso por Área"  
+            title="Progresso por Área (%)"  
         )  
-        st.plotly_chart(fig4)  
+        st.plotly_chart(fig, use_container_width=True)  
 
 if __name__ == "__main__":  
     main()  
